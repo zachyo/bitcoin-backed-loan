@@ -6,6 +6,41 @@ set -euo pipefail
 
 REPO="zachyo/bitcoin-backed-loan"
 
+# Ensure labels exist (create if missing). Using '#000000' color format for compatibility.
+labels=(
+	feat
+	contracts
+	backend
+	math
+	oracle
+	security
+	tests
+	integration
+	tooling
+	enhancement
+	token
+	bug
+	reliability
+	research
+	clarity4
+	perf
+	optimization
+	ci
+	devops
+	docs
+	feature
+	bot
+	tools
+	design
+	risk
+	ops
+	audit
+)
+
+for lbl in "${labels[@]}"; do
+	gh label create "$lbl" --color "#000000" --repo "$REPO" || true
+done
+
 gh issue create --repo "$REPO" --title "Implement borrow & repay logic" --body 'Add `borrow` and `repay` functions to `contracts/vault.clar` with safe accounting, interest snapshotting, and tests. See `ISSUES.md` for full acceptance criteria.' --label feat --label contracts
 
 gh issue create --repo "$REPO" --title "Interest accrual model anchored to Bitcoin block height" --body 'Implement interest accrual using Bitcoin block height. Add functions to compute and apply accrued interest to loans. See `ISSUES.md`.' --label feat --label math --label oracle
