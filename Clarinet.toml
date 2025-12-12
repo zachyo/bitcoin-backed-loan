@@ -7,3 +7,7 @@ version = "0.1.0"
 
 [clarinet]
 chains = ["localnet"]
+
+[contracts.vault]
+path = "contracts/vault.clar"
+epoch = "latest"
