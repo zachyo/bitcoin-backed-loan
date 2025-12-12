@@ -23,6 +23,9 @@ Clarinet.test({
     // read the collateral balance
     const call = chain.callReadOnlyFn("vault", "get-collateral", [types.principal(wallet_1.address)], wallet_1.address);
     call.result.expectUint(100);
+    // contract should now hold 100 STX
+    const balCall = chain.callReadOnlyFn("vault", "get-contract-balance", [], wallet_1.address);
+    balCall.result.expectUint(100);
   },
 });
 
@@ -51,6 +54,9 @@ Clarinet.test({
     block.receipts.forEach((receipt) => {
       receipt.result.expectErr();
     });
+    // contract should still hold 50 STX
+    const balCall2 = chain.callReadOnlyFn("vault", "get-contract-balance", [], wallet_1.address);
+    balCall2.result.expectUint(50);
   },
 });
 
@@ -76,5 +82,35 @@ Clarinet.test({
       Tx.contractCall("vault", "transfer-ownership", [types.principal(wallet_2.address)], wallet_2.address),
     ]);
     block.receipts.forEach((receipt) => receipt.result.expectErr());
+  },
+});
+
+Clarinet.test({
+  name: "withdraw-collateral transfers STX when protection disabled",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const wallet_1 = accounts.get("wallet_1")!;
+
+    // deposit 20
+    chain.mineBlock([
+      Tx.contractCall("vault", "deposit-collateral", [types.uint(20)], wallet_1.address),
+    ]);
+
+    // ensure protection is disabled
+    chain.mineBlock([
+      Tx.contractCall("vault", "set-asset-protection", [types.ascii("STX"), types.bool(false)], deployer.address),
+    ]);
+
+    // withdraw 10
+    const block = chain.mineBlock([
+      Tx.contractCall("vault", "withdraw-collateral", [types.uint(10)], wallet_1.address),
+    ]);
+    block.receipts.forEach((receipt) => {
+      receipt.result.expectOk();
+    });
+
+    // contract balance should be 10 now
+    const balCall = chain.callReadOnlyFn("vault", "get-contract-balance", [], wallet_1.address);
+    balCall.result.expectUint(10);
   },
 });

@@ -61,6 +61,8 @@
 (define-public (deposit-collateral (amount uint))
   (begin
     (asserts! (> amount u0) (err ERR-ZERO-INPUT))
+    ;; Ensure STX is transferred from depositor to the contract
+    (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
     (let ((current (default-to u0 (map-get? collateral tx-sender))))
       (let ((new-balance (+ current amount)))
         (map-set collateral tx-sender new-balance)
@@ -70,13 +72,14 @@
 (define-public (withdraw-collateral (amount uint))
   (begin
     (asserts! (> amount u0) (err ERR-ZERO-INPUT))
-    (let ((protected (default-to false (map-get? asset-protection "STX"))))
+    (let ((protected (default-to false (map-get? asset-protection "STX")))
+          (user tx-sender))
       (asserts! (not protected) (err ERR-PROTECTED))
-      (let ((current (default-to u0 (map-get? collateral tx-sender))))
+      (let ((current (default-to u0 (map-get? collateral user))))
         (asserts! (>= current amount) (err ERR-INSUFFICIENT))
-        (map-set collateral tx-sender (- current amount))
-        ;; If the contract held STX, it could call stx-transfer? here to actually transfer funds back. We keep accounting-only model for now.
-        ;; Note: STX transfer back to user must be handled by off-chain or additional logic
+        (map-set collateral user (- current amount))
+        ;; Transfer STX from contract back to the user
+        (try! (as-contract (stx-transfer? amount tx-sender user)))
         (ok (- current amount))))))
 
 ;; Read-only balance
@@ -86,6 +89,10 @@
 ;; Read-only: Get debt for owner
 (define-read-only (get-debt (owner-principal principal))
   (default-to u0 (map-get? debt owner-principal)))
+
+;; Contract STX balance
+(define-read-only (get-contract-balance)
+  (stx-get-balance (as-contract tx-sender)))
 
 ;; Owner sets price (mock oracle)
 (define-public (set-price (asset-symbol (string-ascii 32)) (price uint))
