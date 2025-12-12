@@ -41,44 +41,76 @@ for lbl in "${labels[@]}"; do
 	gh label create "$lbl" --color "#000000" --repo "$REPO" || true
 done
 
-gh issue create --repo "$REPO" --title "Implement borrow & repay logic" --body 'Add `borrow` and `repay` functions to `contracts/vault.clar` with safe accounting, interest snapshotting, and tests. See `ISSUES.md` for full acceptance criteria.' --label feat --label contracts
+# Helper: check whether an issue with this exact title already exists
+issue_exists() {
+	local title="$1"
+	# Search existing issues (open + closed) for exact title match (case-sensitive)
+	gh issue list --repo "$REPO" --state all --limit 200 --json title 2>/dev/null \
+		| grep -F "\"title\": \"$title\"" >/dev/null 2>&1
+}
 
-gh issue create --repo "$REPO" --title "Interest accrual model anchored to Bitcoin block height" --body 'Implement interest accrual using Bitcoin block height. Add functions to compute and apply accrued interest to loans. See `ISSUES.md`.' --label feat --label math --label oracle
+# Helper: create an issue unless it already exists; log outcome
+create_issue() {
+	local title="$1" body="$2" labels=(${@:3})
+	if issue_exists "$title"; then
+		echo "Skipping existing issue: $title"
+		return 0
+	fi
 
-gh issue create --repo "$REPO" --title "Implement liquidation mechanism and bonus" --body 'Add liquidation logic that lets third-party liquidators repay undercollateralized loans in exchange for collateral plus a bonus.' --label feat --label security
+	echo "Creating issue: $title"
+	# Build label flags
+	local label_flags=()
+	for lbl in "${labels[@]}"; do
+		label_flags+=("--label" "$lbl")
+	done
 
-gh issue create --repo "$REPO" --title "Integrate mock price oracle for tests" --body 'Add an oracle mock contract and an integration test harness so price feeds can be simulated in unit tests (e.g., Pyth-like mock).' --label tests --label integration
+	if ! gh issue create --repo "$REPO" --title "$title" --body "$body" "${label_flags[@]}"; then
+		echo "Failed to create issue: $title" >&2
+		return 1
+	fi
+	return 0
+}
 
-gh issue create --repo "$REPO" --title "Support SIP-010 tokens as collateral" --body 'Expand collateral logic to accept SIP-010 fungible tokens, with per-token LTV parameters.' --label enhancement --label token
+# Use create_issue with title, body, and label list (labels are created above and will be attached if present)
 
-gh issue create --repo "$REPO" --title "Finish withdraw flow to actually transfer STX" --body 'Currently withdraw updates internal accounting but does not transfer STX. Implement transfer or document custody model.' --label bug --label contracts
+create_issue "Implement borrow & repay logic" 'Add `borrow` and `repay` functions to `contracts/vault.clar` with safe accounting, interest snapshotting, and tests. See `ISSUES.md` for full acceptance criteria.' feat contracts
 
-gh issue create --repo "$REPO" --title "Add emergency pause / circuit-breaker mechanism" --body 'Owner or multisig should be able to pause protocol actions (borrow, withdraw, liquidate) in emergencies. Implement and add tests.' --label feat --label security
+create_issue "Interest accrual model anchored to Bitcoin block height" 'Implement interest accrual using Bitcoin block height. Add functions to compute and apply accrued interest to loans. See `ISSUES.md`.' feat math oracle
 
-gh issue create --repo "$REPO" --title "Add comprehensive unit tests and edge case coverage" --body 'Expand the test suite (unit, property-like scenarios) to cover overflows, rounding, reentrancy, and access-control edge cases.' --label tests --label reliability
+create_issue "Implement liquidation mechanism and bonus" 'Add liquidation logic that lets third-party liquidators repay undercollateralized loans in exchange for collateral plus a bonus.' feat security
 
-gh issue create --repo "$REPO" --title "Add property-based tests & invariants for financial safety" --body 'Use fuzzing/property tests to verify invariants (e.g., collateral + repayment cannot shrink below 0; fairness invariants for liquidators).' --label tests --label research
+create_issue "Integrate mock price oracle for tests" 'Add an oracle mock contract and an integration test harness so price feeds can be simulated in unit tests (e.g., Pyth-like mock).' tests integration
 
-gh issue create --repo "$REPO" --title "Add contract verification artifacts using Clarity 4 features" --body 'Use Clarity 4 contract verification and add verification hooks or metadata for automated contract checks.' --label security --label clarity4
+create_issue "Support SIP-010 tokens as collateral" 'Expand collateral logic to accept SIP-010 fungible tokens, with per-token LTV parameters.' enhancement token
 
-gh issue create --repo "$REPO" --title "Gas-cost profiling and optimizations" --body 'Measure function costs and optimize expensive operations (maps, loops). Add cost-conscious implementations where needed.' --label perf --label optimization
+create_issue "Finish withdraw flow to actually transfer STX" 'Currently withdraw updates internal accounting but does not transfer STX. Implement transfer or document custody model.' bug contracts
 
-gh issue create --repo "$REPO" --title "Add GitHub Actions CI for `clarinet check` and `vitest` runs" --body 'Create a GitHub Actions workflow that runs `clarinet check` and `npm test` on PRs and pushes.' --label ci --label devops
+create_issue "Add emergency pause / circuit-breaker mechanism" 'Owner or multisig should be able to pause protocol actions (borrow, withdraw, liquidate) in emergencies. Implement and add tests.' feat security
 
-gh issue create --repo "$REPO" --title "Add simnet/integration harness and test matrix for epoch variations" --body 'Ensure contract works across Clarity/Stacks epoch versions by running tests in different simulated environments.' --label tests --label integration
+create_issue "Add comprehensive unit tests and edge case coverage" 'Expand the test suite (unit, property-like scenarios) to cover overflows, rounding, reentrancy, and access-control edge cases.' tests reliability
 
-gh issue create --repo "$REPO" --title "Add a documentation site and developer HOWTOs" --body 'Expand `README.md` with architecture diagrams, contract docs, and a `DEVELOPING.md` for how to run tests locally and contribute.' --label docs
+create_issue "Add property-based tests & invariants for financial safety" 'Use fuzzing/property tests to verify invariants (e.g., collateral + repayment cannot shrink below 0; fairness invariants for liquidators).' tests research
 
-gh issue create --repo "$REPO" --title "Add a liquidation bot reference implementation" --body 'Implement a small off-chain bot (TypeScript) that scans positions and performs liquidations in a simulated environment.' --label feature --label bot --label tools
+create_issue "Add contract verification artifacts using Clarity 4 features" 'Use Clarity 4 contract verification and add verification hooks or metadata for automated contract checks.' security clarity4
 
-gh issue create --repo "$REPO" --title "Design & implement interest rate model (utilization curve)" --body 'Implement a parametrizable interest rate model based on pool utilization (e.g., kinked curves), and add tests.' --label design --label feature
+create_issue "Gas-cost profiling and optimizations" 'Measure function costs and optimize expensive operations (maps, loops). Add cost-conscious implementations where needed.' perf optimization
 
-gh issue create --repo "$REPO" --title "Implement collateral valuation (oracle integration) and LTV checks" --body 'Add valuation helpers that consult the oracle and compute LTV with slippage margins.' --label contracts --label oracle --label risk
+create_issue "Add GitHub Actions CI for `clarinet check` and `vitest` runs" 'Create a GitHub Actions workflow that runs `clarinet check` and `npm test` on PRs and pushes.' ci devops
 
-gh issue create --repo "$REPO" --title "Add upgrade / migration strategy and scripts" --body 'Define how to migrate state if the contract needs upgrades (e.g., migration helper contract or data export/import plan).' --label ops --label enhancement
+create_issue "Add simnet/integration harness and test matrix for epoch variations" 'Ensure contract works across Clarity/Stacks epoch versions by running tests in different simulated environments.' tests integration
 
-gh issue create --repo "$REPO" --title "Security audit checklist and formal verification tasks" --body 'Prepare a checklist for external audits (threat model, test plan, boundary conditions) and investigate formal verification options.' --label security --label audit
+create_issue "Add a documentation site and developer HOWTOs" 'Expand `README.md` with architecture diagrams, contract docs, and a `DEVELOPING.md` for how to run tests locally and contribute.' docs
 
-gh issue create --repo "$REPO" --title "Add multisig/guarded administration for sensitive ops" --body 'Support multisig or timelocked operations for `transfer-ownership`, `pause`, or critical upgrades to limit single-point-of-failure risk.' --label security --label enhancement
+create_issue "Add a liquidation bot reference implementation" 'Implement a small off-chain bot (TypeScript) that scans positions and performs liquidations in a simulated environment.' feature bot tools
+
+create_issue "Design & implement interest rate model (utilization curve)" 'Implement a parametrizable interest rate model based on pool utilization (e.g., kinked curves), and add tests.' design feature
+
+create_issue "Implement collateral valuation (oracle integration) and LTV checks" 'Add valuation helpers that consult the oracle and compute LTV with slippage margins.' contracts oracle risk
+
+create_issue "Add upgrade / migration strategy and scripts" 'Define how to migrate state if the contract needs upgrades (e.g., migration helper contract or data export/import plan).' ops enhancement
+
+create_issue "Security audit checklist and formal verification tasks" 'Prepare a checklist for external audits (threat model, test plan, boundary conditions) and investigate formal verification options.' security audit
+
+create_issue "Add multisig/guarded administration for sensitive ops" 'Support multisig or timelocked operations for `transfer-ownership`, `pause`, or critical upgrades to limit single-point-of-failure risk.' security enhancement
 
 echo "All issues created."
