@@ -53,3 +53,28 @@ Clarinet.test({
     });
   },
 });
+
+Clarinet.test({
+  name: "owner can transfer ownership and non-owner cannot",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const wallet_1 = accounts.get("wallet_1")!;
+    const wallet_2 = accounts.get("wallet_2")!;
+
+    // deployer transfers ownership to wallet_1
+    let block = chain.mineBlock([
+      Tx.contractCall("vault", "transfer-ownership", [types.principal(wallet_1.address)], deployer.address),
+    ]);
+    block.receipts.forEach((receipt) => receipt.result.expectOk());
+
+    // wallet_1 should now be owner
+    const call = chain.callReadOnlyFn("vault", "is-owner", [types.principal(wallet_1.address)], wallet_1.address);
+    call.result.expectBool(true);
+
+    // wallet_2 (non-owner) tries to transfer and should fail
+    block = chain.mineBlock([
+      Tx.contractCall("vault", "transfer-ownership", [types.principal(wallet_2.address)], wallet_2.address),
+    ]);
+    block.receipts.forEach((receipt) => receipt.result.expectErr());
+  },
+});

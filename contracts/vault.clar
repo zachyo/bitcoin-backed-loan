@@ -27,6 +27,15 @@
 (define-read-only (is-owner (p principal))
   (is-eq p (var-get owner)))
 
+;; Allow the owner to transfer ownership to a new principal
+(define-public (transfer-ownership (new-owner principal))
+  (begin
+    (if (not (is-eq tx-sender (var-get owner)))
+        (err ERR-NOT-OWNER)
+        (begin
+          (var-set owner new-owner)
+          (ok new-owner)))))
+
 ;; Verification hook — placeholder for Clarity 4 contract verification features
 (define-read-only (verify-contract)
   ;; In Clarity 4 this could call into verifier APIs; for now, we assert the owner is set
