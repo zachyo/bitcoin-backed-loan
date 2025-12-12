@@ -1,0 +1,9 @@
+[network]
+name = "devnet"
+
+[project]
+name = "bitcoin-backed-loan"
+version = "0.1.0"
+
+[clarinet]
+chains = ["localnet"]

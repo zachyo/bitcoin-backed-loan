@@ -1,0 +1,8 @@
+# Clarinet artifacts
+/.clarinet
+
+# Node modules
+/node_modules
+
+# Editor
+.vscode/
