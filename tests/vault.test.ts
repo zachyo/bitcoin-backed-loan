@@ -1,80 +1,54 @@
-import {
-  Clarinet,
-  Tx,
-  Chain,
-  Account,
-  types,
-} from 'https://deno.land/x/clarinet@v1.0.5/index.ts';
+import { tx, types } from "@hirosystems/clarinet-sdk";
+import { Cl } from "@stacks/transactions";
 
-Clarinet.test({
-  name: "deposit-collateral increments user balance",
-  async fn(chain: Chain, accounts: Map<string, Account>) {
-    const wallet_1 = accounts.get("wallet_1")!;
+describe("vault contract", () => {
+  test("deposit-collateral increments user balance", async () => {
+    const accounts = await simnet.getAccounts();
+    const wallet1 = accounts.get("wallet_1")!;
 
-    const block = chain.mineBlock([
-      Tx.contractCall("vault", "deposit-collateral", [types.uint(100)], wallet_1.address),
+    const block = await simnet.mineBlock([
+      tx.contractCall("vault", "deposit-collateral", [types.uint(100)], "wallet_1"),
     ]);
 
-    block.receipts.forEach((receipt) => {
-      // ensure the tx returned an ok
-      receipt.result.expectOk();
-    });
+    // should return ok(tuple (depositor ...) (balance 100))
+    expect(block.receipts[0].result).toBeOk(Cl.tuple({ depositor: Cl.standardPrincipal(wallet1), balance: Cl.uint(100) }));
+  });
 
-    // read the collateral balance
-    const call = chain.callReadOnlyFn("vault", "get-collateral", [types.principal(wallet_1.address)], wallet_1.address);
-    call.result.expectUint(100);
-  },
-});
+  test("withdraw-collateral fails when asset protection enabled", async () => {
+    const accounts = await simnet.getAccounts();
+    const wallet1 = accounts.get("wallet_1")!;
 
-Clarinet.test({
-  name: "withdraw-collateral fails when asset protection enabled",
-  async fn(chain: Chain, accounts: Map<string, Account>) {
-    const deployer = accounts.get("deployer")!;
-    const wallet_1 = accounts.get("wallet_1")!;
-
-    // deposit first
-    chain.mineBlock([
-      Tx.contractCall("vault", "deposit-collateral", [types.uint(50)], wallet_1.address),
+    await simnet.mineBlock([
+      tx.contractCall("vault", "deposit-collateral", [types.uint(50)], "wallet_1"),
     ]);
 
-    // owner (deployer) enables protection for STX
-    chain.mineBlock([
-      Tx.contractCall("vault", "set-asset-protection", [types.ascii("STX"), types.bool(true)], deployer.address),
+    await simnet.mineBlock([
+      tx.contractCall("vault", "set-asset-protection", [types.ascii("STX"), types.bool(true)], "deployer"),
     ]);
 
-    // try to withdraw
-    const block = chain.mineBlock([
-      Tx.contractCall("vault", "withdraw-collateral", [types.uint(10)], wallet_1.address),
+    const block = await simnet.mineBlock([
+      tx.contractCall("vault", "withdraw-collateral", [types.uint(10)], "wallet_1"),
     ]);
 
-    // withdrawal should error
-    block.receipts.forEach((receipt) => {
-      receipt.result.expectErr();
-    });
-  },
-});
+    expect(block.receipts[0].result).toBeErr();
+  });
 
-Clarinet.test({
-  name: "owner can transfer ownership and non-owner cannot",
-  async fn(chain: Chain, accounts: Map<string, Account>) {
-    const deployer = accounts.get("deployer")!;
-    const wallet_1 = accounts.get("wallet_1")!;
-    const wallet_2 = accounts.get("wallet_2")!;
+  test("owner can transfer ownership and non-owner cannot", async () => {
+    const accounts = await simnet.getAccounts();
+    const wallet1 = accounts.get("wallet_1")!;
+    const wallet2 = accounts.get("wallet_2")!;
 
-    // deployer transfers ownership to wallet_1
-    let block = chain.mineBlock([
-      Tx.contractCall("vault", "transfer-ownership", [types.principal(wallet_1.address)], deployer.address),
+    let block = await simnet.mineBlock([
+      tx.contractCall("vault", "transfer-ownership", [types.principal(wallet1)], "deployer"),
     ]);
-    block.receipts.forEach((receipt) => receipt.result.expectOk());
+    expect(block.receipts[0].result).toBeOk();
 
-    // wallet_1 should now be owner
-    const call = chain.callReadOnlyFn("vault", "is-owner", [types.principal(wallet_1.address)], wallet_1.address);
-    call.result.expectBool(true);
+    const call = simnet.callReadOnlyFn(new (globalThis as any).CallFnArgs("vault", "is-owner", [types.principal(wallet1)], wallet1));
+    expect(call.result).toBeOk(true);
 
-    // wallet_2 (non-owner) tries to transfer and should fail
-    block = chain.mineBlock([
-      Tx.contractCall("vault", "transfer-ownership", [types.principal(wallet_2.address)], wallet_2.address),
+    block = await simnet.mineBlock([
+      tx.contractCall("vault", "transfer-ownership", [types.principal(wallet2)], "wallet_2"),
     ]);
-    block.receipts.forEach((receipt) => receipt.result.expectErr());
-  },
+    expect(block.receipts[0].result).toBeErr();
+  });
 });
