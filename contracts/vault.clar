@@ -50,8 +50,10 @@
     (if (<= amount u0)
         (err ERR-ZERO-INPUT)
         (let ((current (default-to u0 (map-get? collateral tx-sender))))
-          (map-set collateral tx-sender (+ current amount))
-          (ok (+ current amount))))))
+          (let ((new-balance (+ current amount)))
+            (map-set collateral tx-sender new-balance)
+            ;; Return depositor and new balance as a tuple for richer client-side handling
+            (ok (tuple (depositor tx-sender) (balance new-balance))))))))
 
 (define-public (withdraw-collateral (amount uint))
   (begin
