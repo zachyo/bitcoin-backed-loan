@@ -114,6 +114,32 @@
 ;; Borrowing / repaying
 ;; -------------------------
 
+;; Interest model: simple per-block interest (numerator/denominator)
+;; INTEREST_PER_BLOCK = INTEREST_NUMERATOR / INTEREST_DENOMINATOR per block
+(define-constant INTEREST_NUMERATOR u1)
+(define-constant INTEREST_DENOMINATOR u10)
+
+;; Track last accrual block per borrower to compute interest since last snapshot
+(define-map debt-last-accrual principal uint)
+
+;; Accrue interest for a specific borrower up to the current block-height
+(define-public (accrue-for (owner-principal principal))
+  (let ((current stacks-block-height)
+        (last (default-to stacks-block-height (map-get? debt-last-accrual owner-principal)))
+        (existing (default-to u0 (map-get? debt owner-principal))))
+    (let ((delta (if (>= current last) (- current last) u0)))
+      (begin
+        (asserts! (is-eq u1 u1) (err ERR-ZERO-INPUT))
+        (if (or (<= delta u0) (<= existing u0))
+            (begin 
+              (map-set debt-last-accrual owner-principal current)
+              (ok u0))
+            (begin
+              (let ((interest (/ (* (* existing INTEREST_NUMERATOR) delta) INTEREST_DENOMINATOR)))
+                (map-set debt owner-principal (+ existing interest))
+                (map-set debt-last-accrual owner-principal current)
+                (ok interest))))))))
+
 ;; Helper: compute collateral value for user in price units
 (define-read-only (get-collateral-value (owner-principal principal))
   (let ((stx-amount (default-to u0 (map-get? collateral owner-principal)))
@@ -132,6 +158,8 @@
 (define-public (borrow (amount uint))
   (begin
     (asserts! (> amount u0) (err ERR-BORROW-LOW))
+    ;; apply accrued interest up to current block for borrower
+    (try! (accrue-for tx-sender))
     (let ((col-val (get-collateral-value tx-sender))
           (existing-debt (default-to u0 (map-get? debt tx-sender))))
       ;; Max borrowable = col-val * INITIAL_LTV/100 - existing_debt
@@ -144,6 +172,8 @@
 (define-public (repay (amount uint))
   (begin
     (asserts! (> amount u0) (err ERR-ZERO-INPUT))
+    ;; apply accrued interest before accepting repayment
+    (try! (accrue-for tx-sender))
     (let ((existing (default-to u0 (map-get? debt tx-sender))))
       (asserts! (> existing u0) (err ERR-NO-DEBT))
       (let ((new (if (>= amount existing) u0 (- existing amount))))
@@ -153,6 +183,8 @@
 ;; Liquidate: allows liquidator to clear borrower's debt if LTV exceeds maintenance threshold
 (define-public (liquidate (borrower principal))
   (begin
+    ;; ensure borrower's debt is up-to-date
+    (try! (accrue-for borrower))
     (let ((col-val (get-collateral-value borrower))
           (borrower-debt (default-to u0 (map-get? debt borrower))))
       ;; Only proceed if LTV above threshold and there is debt
