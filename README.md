@@ -71,3 +71,7 @@ clarinet test
 - [ ] Add Interest Rate model based on utilization.
 - [ ] Integrate Price Oracle mock for testing.
 - [ ] Build Liquidation bot logic.
+ 
+## Recent changes
+
+- Implemented interest accrual anchored to Bitcoin block height (per-block accrual). (closes #2)
